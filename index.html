@@ -6,6 +6,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
 <title>BPM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800;900&family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -16,8 +19,8 @@
 –dim: #333;
 –rule: #1a1a1a;
 –red: #ff2800;
-–sans: ‘Helvetica Neue’, ‘Helvetica’, ‘Arial’, sans-serif;
-–mono: ‘SF Mono’, ‘Menlo’, ‘Monaco’, ‘Consolas’, monospace;
+–sans: ‘Archivo’, ‘Helvetica Neue’, ‘Helvetica’, ‘Arial’, sans-serif;
+–mono: ‘IBM Plex Mono’, ‘SF Mono’, ‘Menlo’, monospace;
 }
 
 html, body {
@@ -36,7 +39,6 @@ padding: 24px;
 gap: 0;
 }
 
-/* — Top bar — */
 .topbar {
 display: flex;
 justify-content: space-between;
@@ -55,11 +57,11 @@ text-transform: uppercase;
 .range {
 font-family: var(–mono);
 font-size: 10px;
+font-weight: 300;
 color: var(–gray);
 letter-spacing: 0.04em;
 }
 
-/* — BPM hero — */
 .hero {
 flex: 1;
 display: flex;
@@ -78,7 +80,7 @@ gap: 8px;
 
 .bpm-value {
 font-size: clamp(100px, 28vw, 220px);
-font-weight: 700;
+font-weight: 900;
 line-height: 0.85;
 letter-spacing: -0.04em;
 color: var(–white);
@@ -92,7 +94,7 @@ color: var(–dim);
 
 .bpm-label {
 font-size: 11px;
-font-weight: 400;
+font-weight: 500;
 letter-spacing: 0.12em;
 text-transform: uppercase;
 color: var(–gray);
@@ -100,7 +102,6 @@ align-self: flex-end;
 margin-bottom: 0.18em;
 }
 
-/* — Beat dot — */
 .beat-dot {
 width: 8px;
 height: 8px;
@@ -117,7 +118,6 @@ transition: background 0.04s;
 background: var(–red);
 }
 
-/* — Confidence — */
 .meta-row {
 display: flex;
 align-items: center;
@@ -154,7 +154,6 @@ background: var(–white);
 transition: width 0.5s ease;
 }
 
-/* — Viz — */
 .viz-section {
 display: flex;
 flex-direction: column;
@@ -180,7 +179,6 @@ height: 48px;
 display: block;
 }
 
-/* — Button — */
 .bottom-bar {
 display: flex;
 justify-content: space-between;
@@ -205,14 +203,8 @@ outline: none;
 -webkit-tap-highlight-color: transparent;
 }
 
-.btn:hover {
-border-color: var(–white);
-}
-
-.btn:active {
-background: var(–white);
-color: var(–black);
-}
+.btn:hover { border-color: var(–white); }
+.btn:active { background: var(–white); color: var(–black); }
 
 .btn.active {
 border-color: var(–red);
@@ -220,7 +212,6 @@ color: var(–red);
 }
 
 .btn.active:hover {
-border-color: var(–red);
 background: var(–red);
 color: var(–black);
 }
@@ -228,6 +219,7 @@ color: var(–black);
 .status {
 font-family: var(–mono);
 font-size: 10px;
+font-weight: 300;
 color: var(–dim);
 letter-spacing: 0.04em;
 }
@@ -499,7 +491,6 @@ function drawWaveform() {
   const data = new Float32Array(analyserNode.fftSize);
   analyserNode.getFloatTimeDomainData(data);
 
-  // Center rule
   waveCtx.strokeStyle = 'rgba(255,255,255,0.05)';
   waveCtx.lineWidth = 1;
   waveCtx.beginPath();
@@ -507,7 +498,6 @@ function drawWaveform() {
   waveCtx.lineTo(w, h / 2);
   waveCtx.stroke();
 
-  // Waveform
   waveCtx.beginPath();
   waveCtx.strokeStyle = '#fff';
   waveCtx.lineWidth = 1 * devicePixelRatio;
@@ -539,7 +529,6 @@ function drawEnergy() {
 
   const sliceW = w / showSamples;
 
-  // Filled
   energyCtx.beginPath();
   energyCtx.moveTo(0, h);
   for (let i = 0; i < showSamples; i++) {
@@ -551,7 +540,6 @@ function drawEnergy() {
   energyCtx.fillStyle = 'rgba(255,255,255,0.04)';
   energyCtx.fill();
 
-  // Stroke
   energyCtx.beginPath();
   for (let i = 0; i < showSamples; i++) {
     const val = envBuffer[(startIdx + i) % envBufferSize];
