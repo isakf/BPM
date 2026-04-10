@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BPM Detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+–bg: #080808;
+–surface: #111;
+–border: #1a1a1a;
+–text: #ccc;
+–text-dim: #555;
+–amber: #e8a020;
+–amber-dim: #7a5210;
+–amber-glow: rgba(232, 160, 32, 0.15);
+–red: #c43030;
+–mono: ‘JetBrains Mono’, ‘Courier New’, monospace;
+–display: ‘Space Mono’, monospace;
+}
+
+html, body {
+height: 100%;
+background: var(–bg);
+color: var(–text);
+font-family: var(–mono);
+font-size: 13px;
+overflow: hidden;
+-webkit-font-smoothing: antialiased;
+}
+
+body {
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+gap: 24px;
+padding: 24px;
+}
+
+/* — Top label — */
+.label {
+font-size: 10px;
+letter-spacing: 4px;
+text-transform: uppercase;
+color: var(–text-dim);
+font-weight: 500;
+}
+
+/* — BPM display — */
+.bpm-container {
+position: relative;
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 8px;
+}
+
+.bpm-value {
+font-family: var(–display);
+font-size: clamp(72px, 18vw, 160px);
+font-weight: 700;
+color: var(–amber);
+line-height: 1;
+letter-spacing: -4px;
+text-shadow: 0 0 40px var(–amber-glow), 0 0 80px rgba(232, 160, 32, 0.06);
+transition: opacity 0.3s;
+min-width: 3ch;
+text-align: center;
+}
+
+.bpm-value.inactive {
+color: var(–text-dim);
+text-shadow: none;
+opacity: 0.3;
+}
+
+.bpm-unit {
+font-size: 11px;
+letter-spacing: 6px;
+text-transform: uppercase;
+color: var(–text-dim);
+font-weight: 400;
+}
+
+/* — Beat pulse — */
+.beat-ring {
+position: absolute;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%);
+width: 200px;
+height: 200px;
+border-radius: 50%;
+border: 1px solid transparent;
+pointer-events: none;
+transition: border-color 0.06s, box-shadow 0.06s;
+}
+
+.beat-ring.flash {
+border-color: var(–amber-dim);
+box-shadow: 0 0 30px var(–amber-glow);
+}
+
+/* — Confidence — */
+.confidence-row {
+display: flex;
+align-items: center;
+gap: 10px;
+height: 20px;
+}
+
+.confidence-label {
+font-size: 9px;
+letter-spacing: 2px;
+text-transform: uppercase;
+color: var(–text-dim);
+width: 70px;
+}
+
+.confidence-bar-bg {
+width: 120px;
+height: 3px;
+background: var(–border);
+border-radius: 1px;
+overflow: hidden;
+}
+
+.confidence-bar-fill {
+height: 100%;
+width: 0%;
+background: var(–amber);
+border-radius: 1px;
+transition: width 0.5s ease;
+}
+
+/* — Canvases — */
+.viz-stack {
+display: flex;
+flex-direction: column;
+gap: 2px;
+width: min(600px, 90vw);
+}
+
+.viz-stack canvas {
+width: 100%;
+height: 64px;
+display: block;
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 2px;
+}
+
+.viz-label {
+font-size: 9px;
+letter-spacing: 2px;
+text-transform: uppercase;
+color: var(–text-dim);
+margin-top: 6px;
+margin-bottom: 2px;
+}
+
+/* — Button — */
+.btn {
+font-family: var(–mono);
+font-size: 11px;
+letter-spacing: 3px;
+text-transform: uppercase;
+font-weight: 500;
+padding: 12px 36px;
+border: 1px solid var(–text-dim);
+border-radius: 2px;
+background: transparent;
+color: var(–text);
+cursor: pointer;
+transition: all 0.15s;
+outline: none;
+-webkit-tap-highlight-color: transparent;
+}
+
+.btn:hover { border-color: var(–text); background: rgba(255,255,255,0.03); }
+
+.btn.active {
+border-color: var(–red);
+color: var(–red);
+background: rgba(196, 48, 48, 0.06);
+}
+.btn.active:hover { background: rgba(196, 48, 48, 0.1); }
+
+/* — Range info — */
+.range-info {
+font-size: 10px;
+color: var(–text-dim);
+letter-spacing: 1px;
+}
+</style>
+
+</head>
+<body>
+
+<div class="label">Realtime BPM Detector</div>
+
+<div class="bpm-container">
+  <div class="beat-ring" id="beatRing"></div>
+  <div class="bpm-value inactive" id="bpmDisplay">---</div>
+  <div class="bpm-unit">beats / min</div>
+</div>
+
+<div class="confidence-row">
+  <span class="confidence-label">Confidence</span>
+  <div class="confidence-bar-bg">
+    <div class="confidence-bar-fill" id="confidenceBar"></div>
+  </div>
+</div>
+
+<div class="viz-stack">
+  <div class="viz-label">Waveform</div>
+  <canvas id="waveCanvas"></canvas>
+  <div class="viz-label">Energy envelope</div>
+  <canvas id="energyCanvas"></canvas>
+</div>
+
+<button class="btn" id="toggleBtn">Start listening</button>
+
+<div class="range-info">Detection range: 70 - 180 BPM</div>
+
+<script>
+// -------------------------------------------------------
+// State
+// -------------------------------------------------------
+let audioCtx = null;
+let micStream = null;
+let sourceNode = null;
+let filterNode = null;
+let analyserNode = null;
+let captureNode = null;
+let running = false;
+let animFrame = null;
+let analysisTimer = null;
+
+// Envelope ring buffer
+const SAMPLE_RATE = 44100; // assumed, corrected on init
+const ENV_HOP = 256;
+const ENV_SECONDS = 10;
+let envRate = SAMPLE_RATE / ENV_HOP;
+let envBufferSize = Math.ceil(envRate * ENV_SECONDS);
+let envBuffer = new Float32Array(envBufferSize);
+let envWriteIdx = 0;
+let envSampleCount = 0;
+
+// BPM state
+let currentBpm = 0;
+let smoothedBpm = 0;
+let confidence = 0;
+const BPM_MIN = 70;
+const BPM_MAX = 180;
+const SMOOTH_ALPHA = 0.25;
+
+// Beat pulse
+let lastBeatTime = 0;
+let beatInterval = 0;
+
+// -------------------------------------------------------
+// DOM
+// -------------------------------------------------------
+const bpmDisplay = document.getElementById('bpmDisplay');
+const confidenceBar = document.getElementById('confidenceBar');
+const beatRing = document.getElementById('beatRing');
+const waveCanvas = document.getElementById('waveCanvas');
+const energyCanvas = document.getElementById('energyCanvas');
+const toggleBtn = document.getElementById('toggleBtn');
+
+const waveCtx = waveCanvas.getContext('2d');
+const energyCtx = energyCanvas.getContext('2d');
+
+function resizeCanvases() {
+  for (const c of [waveCanvas, energyCanvas]) {
+    const rect = c.getBoundingClientRect();
+    c.width = rect.width * devicePixelRatio;
+    c.height = rect.height * devicePixelRatio;
+  }
+}
+resizeCanvases();
+window.addEventListener('resize', resizeCanvases);
+
+// -------------------------------------------------------
+// Audio setup
+// -------------------------------------------------------
+async function startAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const actualRate = audioCtx.sampleRate;
+  envRate = actualRate / ENV_HOP;
+  envBufferSize = Math.ceil(envRate * ENV_SECONDS);
+  envBuffer = new Float32Array(envBufferSize);
+  envWriteIdx = 0;
+  envSampleCount = 0;
+  smoothedBpm = 0;
+  confidence = 0;
+
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  sourceNode = audioCtx.createMediaStreamSource(micStream);
+
+  // Low-pass filter for kick isolation
+  filterNode = audioCtx.createBiquadFilter();
+  filterNode.type = 'lowpass';
+  filterNode.frequency.value = 150;
+  filterNode.Q.value = 0.7;
+
+  // Analyser for waveform viz (full range)
+  analyserNode = audioCtx.createAnalyser();
+  analyserNode.fftSize = 2048;
+  analyserNode.smoothingTimeConstant = 0.6;
+
+  // ScriptProcessor to capture filtered audio for envelope
+  const bufSize = 4096;
+  captureNode = audioCtx.createScriptProcessor(bufSize, 1, 1);
+  let hopAccum = new Float32Array(ENV_HOP);
+  let hopIdx = 0;
+
+  captureNode.onaudioprocess = (e) => {
+    const input = e.inputBuffer.getChannelData(0);
+    for (let i = 0; i < input.length; i++) {
+      hopAccum[hopIdx] = input[i];
+      hopIdx++;
+      if (hopIdx >= ENV_HOP) {
+        // Compute RMS of this hop
+        let sum = 0;
+        for (let j = 0; j < ENV_HOP; j++) sum += hopAccum[j] * hopAccum[j];
+        const rms = Math.sqrt(sum / ENV_HOP);
+        envBuffer[envWriteIdx] = rms;
+        envWriteIdx = (envWriteIdx + 1) % envBufferSize;
+        envSampleCount++;
+        hopIdx = 0;
+      }
+    }
+    // Pass through silence (required for ScriptProcessor to stay alive)
+    const output = e.outputBuffer.getChannelData(0);
+    for (let i = 0; i < output.length; i++) output[i] = 0;
+  };
+
+  // Connect: source → filter → captureNode → destination (silent)
+  sourceNode.connect(filterNode);
+  filterNode.connect(captureNode);
+  captureNode.connect(audioCtx.destination);
+
+  // Source → analyser (full range, not connected to output)
+  sourceNode.connect(analyserNode);
+
+  running = true;
+  drawLoop();
+  // Run BPM analysis every 2 seconds
+  analysisTimer = setInterval(analyzeBpm, 2000);
+  // Run first analysis after 4 seconds of data
+  setTimeout(analyzeBpm, 4000);
+}
+
+function stopAudio() {
+  running = false;
+  if (animFrame) cancelAnimationFrame(animFrame);
+  if (analysisTimer) clearInterval(analysisTimer);
+  if (captureNode) captureNode.disconnect();
+  if (filterNode) filterNode.disconnect();
+  if (analyserNode) analyserNode.disconnect();
+  if (sourceNode) sourceNode.disconnect();
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (audioCtx) audioCtx.close();
+  audioCtx = null;
+  currentBpm = 0;
+  smoothedBpm = 0;
+  confidence = 0;
+  bpmDisplay.textContent = '---';
+  bpmDisplay.classList.add('inactive');
+  confidenceBar.style.width = '0%';
+}
+
+// -------------------------------------------------------
+// BPM analysis: autocorrelation of energy envelope
+// -------------------------------------------------------
+function analyzeBpm() {
+  // Need at least 6 seconds of data
+  const minSamples = Math.ceil(envRate * 6);
+  if (envSampleCount < minSamples) return;
+
+  const useSamples = Math.min(envSampleCount, envBufferSize);
+  const envelope = new Float32Array(useSamples);
+
+  // Linearize ring buffer
+  const start = (envWriteIdx - useSamples + envBufferSize) % envBufferSize;
+  for (let i = 0; i < useSamples; i++) {
+    envelope[i] = envBuffer[(start + i) % envBufferSize];
+  }
+
+  // Compute mean and normalize
+  let mean = 0;
+  for (let i = 0; i < useSamples; i++) mean += envelope[i];
+  mean /= useSamples;
+
+  const norm = new Float32Array(useSamples);
+  for (let i = 0; i < useSamples; i++) norm[i] = envelope[i] - mean;
+
+  // Lag range for BPM_MIN to BPM_MAX
+  const minLag = Math.floor(envRate * 60 / BPM_MAX);
+  const maxLag = Math.ceil(envRate * 60 / BPM_MIN);
+  const lagRange = maxLag - minLag + 1;
+
+  if (maxLag >= useSamples / 2) return; // not enough data
+
+  // Normalized autocorrelation
+  const acf = new Float32Array(lagRange);
+  for (let l = 0; l < lagRange; l++) {
+    const lag = minLag + l;
+    let sum = 0, n1 = 0, n2 = 0;
+    const len = useSamples - lag;
+    for (let i = 0; i < len; i++) {
+      sum += norm[i] * norm[i + lag];
+      n1 += norm[i] * norm[i];
+      n2 += norm[i + lag] * norm[i + lag];
+    }
+    const d = Math.sqrt(n1 * n2);
+    acf[l] = d > 0 ? sum / d : 0;
+  }
+
+  // Find peak in ACF
+  let bestIdx = 0;
+  let bestVal = -Infinity;
+  for (let l = 1; l < lagRange - 1; l++) {
+    if (acf[l] > bestVal && acf[l] > acf[l - 1] && acf[l] > acf[l + 1]) {
+      bestVal = acf[l];
+      bestIdx = l;
+    }
+  }
+
+  if (bestVal < 0.05) {
+    // No clear periodicity
+    confidence = Math.max(0, confidence - 0.15);
+    confidenceBar.style.width = (confidence * 100) + '%';
+    return;
+  }
+
+  // Parabolic interpolation for sub-sample precision
+  let refinedIdx = bestIdx;
+  if (bestIdx > 0 && bestIdx < lagRange - 1) {
+    const a = acf[bestIdx - 1];
+    const b = acf[bestIdx];
+    const c = acf[bestIdx + 1];
+    const denom = a - 2 * b + c;
+    if (Math.abs(denom) > 1e-10) {
+      refinedIdx = bestIdx + 0.5 * (a - c) / denom;
+    }
+  }
+
+  const lag = minLag + refinedIdx;
+  const detectedBpm = (envRate * 60) / lag;
+
+  // Octave folding - ensure within range
+  let bpm = detectedBpm;
+  while (bpm < BPM_MIN) bpm *= 2;
+  while (bpm > BPM_MAX) bpm /= 2;
+
+  // Check for strong sub-harmonics (half-tempo preference for ambiguous cases)
+  // Look for a peak at double the lag (half BPM)
+  const doubleLagIdx = Math.round((lag * 2) - minLag);
+  if (doubleLagIdx > 0 && doubleLagIdx < lagRange - 1) {
+    const subVal = acf[doubleLagIdx];
+    // If the sub-harmonic is nearly as strong, prefer the higher BPM (it's likely the actual beat)
+    // This helps avoid half-tempo detection on four-on-the-floor
+  }
+
+  currentBpm = bpm;
+
+  // Exponential moving average
+  if (smoothedBpm === 0) {
+    smoothedBpm = bpm;
+  } else {
+    // Only smooth if close to current estimate (avoid dragging through tempo changes)
+    if (Math.abs(bpm - smoothedBpm) < 15) {
+      smoothedBpm = SMOOTH_ALPHA * bpm + (1 - SMOOTH_ALPHA) * smoothedBpm;
+    } else {
+      smoothedBpm = bpm; // jump to new tempo
+    }
+  }
+
+  confidence = Math.min(1, bestVal * 1.5);
+
+  // Update display
+  const displayBpm = Math.round(smoothedBpm * 10) / 10;
+  bpmDisplay.textContent = displayBpm.toFixed(1);
+  bpmDisplay.classList.remove('inactive');
+  confidenceBar.style.width = (confidence * 100) + '%';
+
+  // Update beat interval for pulse
+  beatInterval = 60000 / smoothedBpm; // ms
+}
+
+// -------------------------------------------------------
+// Visualization
+// -------------------------------------------------------
+function drawLoop() {
+  if (!running) return;
+  animFrame = requestAnimationFrame(drawLoop);
+
+  drawWaveform();
+  drawEnergy();
+  pulseBeat();
+}
+
+function drawWaveform() {
+  const w = waveCanvas.width;
+  const h = waveCanvas.height;
+  waveCtx.clearRect(0, 0, w, h);
+
+  if (!analyserNode) return;
+
+  const bufLen = analyserNode.fftSize;
+  const data = new Float32Array(bufLen);
+  analyserNode.getFloatTimeDomainData(data);
+
+  waveCtx.beginPath();
+  waveCtx.strokeStyle = '#e8a020';
+  waveCtx.lineWidth = 1.2 * devicePixelRatio;
+
+  const sliceW = w / bufLen;
+  for (let i = 0; i < bufLen; i++) {
+    const x = i * sliceW;
+    const y = (0.5 + data[i] * 0.45) * h;
+    if (i === 0) waveCtx.moveTo(x, y);
+    else waveCtx.lineTo(x, y);
+  }
+  waveCtx.stroke();
+
+  // Center line
+  waveCtx.beginPath();
+  waveCtx.strokeStyle = 'rgba(255,255,255,0.04)';
+  waveCtx.lineWidth = 1;
+  waveCtx.moveTo(0, h / 2);
+  waveCtx.lineTo(w, h / 2);
+  waveCtx.stroke();
+}
+
+function drawEnergy() {
+  const w = energyCanvas.width;
+  const h = energyCanvas.height;
+  energyCtx.clearRect(0, 0, w, h);
+
+  const useSamples = Math.min(envSampleCount, envBufferSize);
+  if (useSamples < 2) return;
+
+  // Show last ~4 seconds
+  const showSamples = Math.min(useSamples, Math.ceil(envRate * 4));
+  const startIdx = (envWriteIdx - showSamples + envBufferSize) % envBufferSize;
+
+  // Find max for scaling
+  let maxVal = 0;
+  for (let i = 0; i < showSamples; i++) {
+    const val = envBuffer[(startIdx + i) % envBufferSize];
+    if (val > maxVal) maxVal = val;
+  }
+  if (maxVal < 0.001) maxVal = 0.001;
+
+  // Draw filled envelope
+  energyCtx.beginPath();
+  energyCtx.moveTo(0, h);
+  const sliceW = w / showSamples;
+  for (let i = 0; i < showSamples; i++) {
+    const val = envBuffer[(startIdx + i) % envBufferSize];
+    const x = i * sliceW;
+    const y = h - (val / maxVal) * h * 0.9;
+    energyCtx.lineTo(x, y);
+  }
+  energyCtx.lineTo(w, h);
+  energyCtx.closePath();
+  energyCtx.fillStyle = 'rgba(232, 160, 32, 0.15)';
+  energyCtx.fill();
+
+  // Stroke top edge
+  energyCtx.beginPath();
+  for (let i = 0; i < showSamples; i++) {
+    const val = envBuffer[(startIdx + i) % envBufferSize];
+    const x = i * sliceW;
+    const y = h - (val / maxVal) * h * 0.9;
+    if (i === 0) energyCtx.moveTo(x, y);
+    else energyCtx.lineTo(x, y);
+  }
+  energyCtx.strokeStyle = '#e8a020';
+  energyCtx.lineWidth = 1 * devicePixelRatio;
+  energyCtx.stroke();
+}
+
+function pulseBeat() {
+  if (smoothedBpm <= 0 || beatInterval <= 0) return;
+  const now = performance.now();
+  if (now - lastBeatTime >= beatInterval) {
+    lastBeatTime = now - ((now - lastBeatTime) % beatInterval);
+    beatRing.classList.add('flash');
+    setTimeout(() => beatRing.classList.remove('flash'), 80);
+  }
+}
+
+// -------------------------------------------------------
+// Toggle
+// -------------------------------------------------------
+toggleBtn.addEventListener('click', async () => {
+  if (!running) {
+    try {
+      toggleBtn.textContent = 'Starting...';
+      await startAudio();
+      toggleBtn.textContent = 'Stop';
+      toggleBtn.classList.add('active');
+    } catch (err) {
+      console.error(err);
+      toggleBtn.textContent = 'Start listening';
+      alert('Could not access microphone. Please allow microphone access and try again.');
+    }
+  } else {
+    stopAudio();
+    toggleBtn.textContent = 'Start listening';
+    toggleBtn.classList.remove('active');
+  }
+});
+</script>
+
+</body>
+</html>
