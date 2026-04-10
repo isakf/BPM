@@ -3,12 +3,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>BPM</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800;900&family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -19,8 +18,8 @@
 –dim: #333;
 –rule: #1a1a1a;
 –red: #ff2800;
-–sans: ‘Archivo’, ‘Helvetica Neue’, ‘Helvetica’, ‘Arial’, sans-serif;
-–mono: ‘IBM Plex Mono’, ‘SF Mono’, ‘Menlo’, monospace;
+–sans: system-ui, -apple-system, BlinkMacSystemFont, ‘Segoe UI’, sans-serif;
+–mono: ui-monospace, ‘SF Mono’, ‘Menlo’, ‘Consolas’, monospace;
 }
 
 html, body {
@@ -36,6 +35,8 @@ body {
 display: flex;
 flex-direction: column;
 padding: 24px;
+padding-top: max(24px, env(safe-area-inset-top));
+padding-bottom: max(24px, env(safe-area-inset-bottom));
 gap: 0;
 }
 
@@ -57,7 +58,6 @@ text-transform: uppercase;
 .range {
 font-family: var(–mono);
 font-size: 10px;
-font-weight: 300;
 color: var(–gray);
 letter-spacing: 0.04em;
 }
@@ -80,7 +80,7 @@ gap: 8px;
 
 .bpm-value {
 font-size: clamp(100px, 28vw, 220px);
-font-weight: 900;
+font-weight: 800;
 line-height: 0.85;
 letter-spacing: -0.04em;
 color: var(–white);
@@ -195,11 +195,13 @@ letter-spacing: 0.14em;
 text-transform: uppercase;
 padding: 10px 28px;
 border: 1px solid var(–gray);
+border-radius: 0;
 background: transparent;
 color: var(–white);
 cursor: pointer;
 transition: all 0.1s;
 outline: none;
+-webkit-appearance: none;
 -webkit-tap-highlight-color: transparent;
 }
 
@@ -219,7 +221,6 @@ color: var(–black);
 .status {
 font-family: var(–mono);
 font-size: 10px;
-font-weight: 300;
 color: var(–dim);
 letter-spacing: 0.04em;
 }
@@ -229,7 +230,7 @@ color: var(–red);
 }
 
 .status.live::before {
-content: ‘●’;
+content: ‘\25CF’;
 margin-right: 5px;
 }
 </style>
@@ -239,13 +240,13 @@ margin-right: 5px;
 
 <div class="topbar">
   <div class="title">BPM Detector</div>
-  <div class="range">70–180</div>
+  <div class="range">70-180</div>
 </div>
 
 <div class="hero">
   <div class="beat-dot" id="beatDot"></div>
   <div class="bpm-row">
-    <div class="bpm-value inactive" id="bpmDisplay">—</div>
+    <div class="bpm-value inactive" id="bpmDisplay">0</div>
     <div class="bpm-label">BPM</div>
   </div>
 </div>
@@ -349,7 +350,7 @@ async function startAudio() {
   let hopAccum = new Float32Array(ENV_HOP);
   let hopIdx = 0;
 
-  captureNode.onaudioprocess = (e) => {
+  captureNode.onaudioprocess = function(e) {
     const input = e.inputBuffer.getChannelData(0);
     for (let i = 0; i < input.length; i++) {
       hopAccum[hopIdx] = input[i];
@@ -386,56 +387,56 @@ function stopAudio() {
   if (filterNode) filterNode.disconnect();
   if (analyserNode) analyserNode.disconnect();
   if (sourceNode) sourceNode.disconnect();
-  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (micStream) micStream.getTracks().forEach(function(t) { t.stop(); });
   if (audioCtx) audioCtx.close();
   audioCtx = null;
   smoothedBpm = 0;
   confidence = 0;
-  bpmDisplay.textContent = '—';
+  bpmDisplay.textContent = '0';
   bpmDisplay.classList.add('inactive');
   confidenceBar.style.width = '0%';
 }
 
 function analyzeBpm() {
-  const minSamples = Math.ceil(envRate * 6);
+  var minSamples = Math.ceil(envRate * 6);
   if (envSampleCount < minSamples) return;
 
-  const useSamples = Math.min(envSampleCount, envBufferSize);
-  const envelope = new Float32Array(useSamples);
-  const start = (envWriteIdx - useSamples + envBufferSize) % envBufferSize;
-  for (let i = 0; i < useSamples; i++) {
+  var useSamples = Math.min(envSampleCount, envBufferSize);
+  var envelope = new Float32Array(useSamples);
+  var start = (envWriteIdx - useSamples + envBufferSize) % envBufferSize;
+  for (var i = 0; i < useSamples; i++) {
     envelope[i] = envBuffer[(start + i) % envBufferSize];
   }
 
-  let mean = 0;
-  for (let i = 0; i < useSamples; i++) mean += envelope[i];
+  var mean = 0;
+  for (var i = 0; i < useSamples; i++) mean += envelope[i];
   mean /= useSamples;
 
-  const norm = new Float32Array(useSamples);
-  for (let i = 0; i < useSamples; i++) norm[i] = envelope[i] - mean;
+  var norm = new Float32Array(useSamples);
+  for (var i = 0; i < useSamples; i++) norm[i] = envelope[i] - mean;
 
-  const minLag = Math.floor(envRate * 60 / BPM_MAX);
-  const maxLag = Math.ceil(envRate * 60 / BPM_MIN);
-  const lagRange = maxLag - minLag + 1;
+  var minLag = Math.floor(envRate * 60 / BPM_MAX);
+  var maxLag = Math.ceil(envRate * 60 / BPM_MIN);
+  var lagRange = maxLag - minLag + 1;
   if (maxLag >= useSamples / 2) return;
 
-  const acf = new Float32Array(lagRange);
-  for (let l = 0; l < lagRange; l++) {
-    const lag = minLag + l;
-    let sum = 0, n1 = 0, n2 = 0;
-    const len = useSamples - lag;
-    for (let i = 0; i < len; i++) {
+  var acf = new Float32Array(lagRange);
+  for (var l = 0; l < lagRange; l++) {
+    var lag = minLag + l;
+    var sum = 0, n1 = 0, n2 = 0;
+    var len = useSamples - lag;
+    for (var i = 0; i < len; i++) {
       sum += norm[i] * norm[i + lag];
       n1 += norm[i] * norm[i];
       n2 += norm[i + lag] * norm[i + lag];
     }
-    const d = Math.sqrt(n1 * n2);
+    var d = Math.sqrt(n1 * n2);
     acf[l] = d > 0 ? sum / d : 0;
   }
 
-  let bestIdx = 0;
-  let bestVal = -Infinity;
-  for (let l = 1; l < lagRange - 1; l++) {
+  var bestIdx = 0;
+  var bestVal = -Infinity;
+  for (var l = 1; l < lagRange - 1; l++) {
     if (acf[l] > bestVal && acf[l] > acf[l - 1] && acf[l] > acf[l + 1]) {
       bestVal = acf[l];
       bestIdx = l;
@@ -448,15 +449,15 @@ function analyzeBpm() {
     return;
   }
 
-  let refinedIdx = bestIdx;
+  var refinedIdx = bestIdx;
   if (bestIdx > 0 && bestIdx < lagRange - 1) {
-    const a = acf[bestIdx - 1], b = acf[bestIdx], c = acf[bestIdx + 1];
-    const denom = a - 2 * b + c;
+    var a = acf[bestIdx - 1], b = acf[bestIdx], c = acf[bestIdx + 1];
+    var denom = a - 2 * b + c;
     if (Math.abs(denom) > 1e-10) refinedIdx = bestIdx + 0.5 * (a - c) / denom;
   }
 
-  const lag = minLag + refinedIdx;
-  let bpm = (envRate * 60) / lag;
+  var lag = minLag + refinedIdx;
+  var bpm = (envRate * 60) / lag;
   while (bpm < BPM_MIN) bpm *= 2;
   while (bpm > BPM_MAX) bpm /= 2;
 
@@ -484,11 +485,11 @@ function drawLoop() {
 }
 
 function drawWaveform() {
-  const w = waveCanvas.width, h = waveCanvas.height;
+  var w = waveCanvas.width, h = waveCanvas.height;
   waveCtx.clearRect(0, 0, w, h);
   if (!analyserNode) return;
 
-  const data = new Float32Array(analyserNode.fftSize);
+  var data = new Float32Array(analyserNode.fftSize);
   analyserNode.getFloatTimeDomainData(data);
 
   waveCtx.strokeStyle = 'rgba(255,255,255,0.05)';
@@ -501,38 +502,38 @@ function drawWaveform() {
   waveCtx.beginPath();
   waveCtx.strokeStyle = '#fff';
   waveCtx.lineWidth = 1 * devicePixelRatio;
-  const sliceW = w / data.length;
-  for (let i = 0; i < data.length; i++) {
-    const x = i * sliceW;
-    const y = (0.5 + data[i] * 0.45) * h;
+  var sliceW = w / data.length;
+  for (var i = 0; i < data.length; i++) {
+    var x = i * sliceW;
+    var y = (0.5 + data[i] * 0.45) * h;
     if (i === 0) waveCtx.moveTo(x, y); else waveCtx.lineTo(x, y);
   }
   waveCtx.stroke();
 }
 
 function drawEnergy() {
-  const w = energyCanvas.width, h = energyCanvas.height;
+  var w = energyCanvas.width, h = energyCanvas.height;
   energyCtx.clearRect(0, 0, w, h);
 
-  const useSamples = Math.min(envSampleCount, envBufferSize);
+  var useSamples = Math.min(envSampleCount, envBufferSize);
   if (useSamples < 2) return;
 
-  const showSamples = Math.min(useSamples, Math.ceil(envRate * 4));
-  const startIdx = (envWriteIdx - showSamples + envBufferSize) % envBufferSize;
+  var showSamples = Math.min(useSamples, Math.ceil(envRate * 4));
+  var startIdx = (envWriteIdx - showSamples + envBufferSize) % envBufferSize;
 
-  let maxVal = 0;
-  for (let i = 0; i < showSamples; i++) {
-    const val = envBuffer[(startIdx + i) % envBufferSize];
+  var maxVal = 0;
+  for (var i = 0; i < showSamples; i++) {
+    var val = envBuffer[(startIdx + i) % envBufferSize];
     if (val > maxVal) maxVal = val;
   }
   if (maxVal < 0.001) maxVal = 0.001;
 
-  const sliceW = w / showSamples;
+  var sliceW = w / showSamples;
 
   energyCtx.beginPath();
   energyCtx.moveTo(0, h);
-  for (let i = 0; i < showSamples; i++) {
-    const val = envBuffer[(startIdx + i) % envBufferSize];
+  for (var i = 0; i < showSamples; i++) {
+    var val = envBuffer[(startIdx + i) % envBufferSize];
     energyCtx.lineTo(i * sliceW, h - (val / maxVal) * h * 0.9);
   }
   energyCtx.lineTo(w, h);
@@ -541,9 +542,9 @@ function drawEnergy() {
   energyCtx.fill();
 
   energyCtx.beginPath();
-  for (let i = 0; i < showSamples; i++) {
-    const val = envBuffer[(startIdx + i) % envBufferSize];
-    const x = i * sliceW, y = h - (val / maxVal) * h * 0.9;
+  for (var i = 0; i < showSamples; i++) {
+    var val = envBuffer[(startIdx + i) % envBufferSize];
+    var x = i * sliceW, y = h - (val / maxVal) * h * 0.9;
     if (i === 0) energyCtx.moveTo(x, y); else energyCtx.lineTo(x, y);
   }
   energyCtx.strokeStyle = 'rgba(255,255,255,0.5)';
@@ -553,15 +554,15 @@ function drawEnergy() {
 
 function pulseBeat() {
   if (smoothedBpm <= 0 || beatInterval <= 0) return;
-  const now = performance.now();
+  var now = performance.now();
   if (now - lastBeatTime >= beatInterval) {
     lastBeatTime = now - ((now - lastBeatTime) % beatInterval);
     beatDot.classList.add('flash');
-    setTimeout(() => beatDot.classList.remove('flash'), 60);
+    setTimeout(function() { beatDot.classList.remove('flash'); }, 60);
   }
 }
 
-toggleBtn.addEventListener('click', async () => {
+toggleBtn.addEventListener('click', async function() {
   if (!running) {
     try {
       toggleBtn.textContent = '...';
